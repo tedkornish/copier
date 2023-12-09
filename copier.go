@@ -304,7 +304,14 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 		}
 
 		// Get tag options
-		flgs, err := getFlags(dest, source, toType, fromType)
+		flgs, err := getFlags(
+			dest,
+			source,
+			toType,
+			fromType,
+			opt.MustByDefault,
+			opt.NoPanicByDefault,
+		)
 		if err != nil {
 			return err
 		}
@@ -684,9 +691,9 @@ func lookupAndCopyWithConverter(to, from reflect.Value, converters map[converter
 }
 
 // parseTags Parses struct tags and returns uint8 bit flags.
-func parseTags(tag string) (flg uint8, name string, err error) {
+func parseTags(tag string, mustByDefault, noPanicByDefault bool) (flg uint8, name string, err error) {
 	for _, t := range strings.Split(tag, ",") {
-		switch t {
+		switch t { // TODO restructure to not match on t; inline the matching
 		case "-":
 			flg = tagIgnore
 			return
@@ -706,7 +713,12 @@ func parseTags(tag string) (flg uint8, name string, err error) {
 }
 
 // getTagFlags Parses struct tags for bit flags, field name.
-func getFlags(dest, src reflect.Value, toType, fromType reflect.Type) (flags, error) {
+func getFlags(
+	dest, src reflect.Value,
+	toType, fromType reflect.Type,
+	mustByDefault bool,
+	noPanicByDefault bool,
+) (flags, error) {
 	flgs := flags{
 		BitFlags: map[string]uint8{},
 		SrcNames: tagNameMapping{
@@ -732,13 +744,22 @@ func getFlags(dest, src reflect.Value, toType, fromType reflect.Type) (flags, er
 		if tags != "" {
 			var name string
 			var err error
-			if flgs.BitFlags[field.Name], name, err = parseTags(tags); err != nil {
+			if flgs.BitFlags[field.Name], name, err = parseTags(tags, mustByDefault, noPanicByDefault); err != nil {
 				return flags{}, err
 			} else if name != "" {
 				flgs.DestNames.FieldNameToTag[field.Name] = name
 				flgs.DestNames.TagToFieldName[name] = field.Name
 			}
 		}
+
+		withDefaults, _ := flgs.BitFlags[field.Name]
+		if mustByDefault {
+			withDefaults = withDefaults & tagMust
+		}
+		if noPanicByDefault {
+			withDefaults = withDefaults & tagNoPanic
+		}
+		flgs.BitFlags[field.Name] = withDefaults
 	}
 
 	// Get a list source of tags
@@ -747,7 +768,7 @@ func getFlags(dest, src reflect.Value, toType, fromType reflect.Type) (flags, er
 		if tags != "" {
 			var name string
 			var err error
-			if _, name, err = parseTags(tags); err != nil {
+			if _, name, err = parseTags(tags, mustByDefault, noPanicByDefault); err != nil {
 				return flags{}, err
 			} else if name != "" {
 				flgs.SrcNames.FieldNameToTag[field.Name] = name
