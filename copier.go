@@ -460,7 +460,7 @@ func copier(toValue interface{}, fromValue interface{}, opt Option) (err error) 
 			to.Set(dest)
 		}
 
-		err = checkBitFlags(flgs.BitFlags, opt.MustByDefault, opt.NoPanicByDefault)
+		err = checkBitFlags(flgs.BitFlags)
 		if err != nil {
 			return err
 		}
@@ -782,17 +782,15 @@ func getFlags(
 // checkBitFlags Checks flags for error or panic conditions.
 func checkBitFlags(
 	flagsList map[string]uint8,
-	mustByDefault bool,
-	noPanicByDefault bool,
 ) (err error) {
 	// Check flag conditions were met
 	for name, flgs := range flagsList {
 		if flgs&hasCopied == 0 {
 			switch {
-			case (flgs&tagMust != 0 || mustByDefault) && (flgs&tagNoPanic != 0 || noPanicByDefault):
+			case flgs&tagMust != 0 && flgs&tagNoPanic != 0:
 				err = fmt.Errorf("field %s has must tag but was not copied", name)
 				return
-			case flgs&(tagMust) != 0 || mustByDefault:
+			case flgs&(tagMust) != 0:
 				panic(fmt.Sprintf("Field %s has must tag but was not copied", name))
 			}
 		}
